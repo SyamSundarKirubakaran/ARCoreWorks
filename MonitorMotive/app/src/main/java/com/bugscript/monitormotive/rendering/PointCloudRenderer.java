@@ -9,7 +9,6 @@ import com.bugscript.monitormotive.R;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-/** Renders a point cloud. */
 public class PointCloudRenderer {
     private static final String TAG = PointCloud.class.getSimpleName();
 
@@ -29,18 +28,10 @@ public class PointCloudRenderer {
 
     private int numPoints = 0;
 
-    // Keep track of the last point cloud rendered to avoid updating the VBO if point cloud
-    // was not changed.
     private PointCloud lastPointCloud = null;
 
     public PointCloudRenderer() {}
 
-    /**
-     * Allocates and initializes OpenGL resources needed by the plane renderer. Must be called on the
-     * OpenGL thread, typically in {@link GLSurfaceView.Renderer#onSurfaceCreated(GL10, EGLConfig)}.
-     *
-     * @param context Needed to access shader source.
-     */
     public void createOnGlThread(Context context) {
         ShaderUtil.checkGLError(TAG, "before create");
 
@@ -77,13 +68,8 @@ public class PointCloudRenderer {
         ShaderUtil.checkGLError(TAG, "program  params");
     }
 
-    /**
-     * Updates the OpenGL buffer contents to the provided point. Repeated calls with the same point
-     * cloud will be ignored.
-     */
     public void update(PointCloud cloud) {
         if (lastPointCloud == cloud) {
-            // Redundant call.
             return;
         }
 
@@ -92,7 +78,6 @@ public class PointCloudRenderer {
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo);
         lastPointCloud = cloud;
 
-        // If the VBO is not large enough to fit the new point cloud, resize it.
         numPoints = lastPointCloud.getPoints().remaining() / FLOATS_PER_POINT;
         if (numPoints * BYTES_PER_POINT > vboSize) {
             while (numPoints * BYTES_PER_POINT > vboSize) {
@@ -106,15 +91,7 @@ public class PointCloudRenderer {
 
         ShaderUtil.checkGLError(TAG, "after update");
     }
-
-    /**
-     * Renders the point cloud. ArCore point cloud is given in world space.
-     *
-     * @param cameraView the camera view matrix for this frame, typically from {@link
-     *     com.google.ar.core.Camera#getViewMatrix(float[], int)}.
-     * @param cameraPerspective the camera projection matrix for this frame, typically from {@link
-     *     com.google.ar.core.Camera#getProjectionMatrix(float[], int, float, float)}.
-     */
+    
     public void draw(float[] cameraView, float[] cameraPerspective) {
         float[] modelViewProjection = new float[16];
         Matrix.multiplyMM(modelViewProjection, 0, cameraPerspective, 0, cameraView, 0);
