@@ -41,7 +41,7 @@ public class DisplayRotationHelper implements DisplayListener {
             viewportChanged = false;
         }
     }
-    
+
     public int getRotation() {
         return display.getRotation();
     }
