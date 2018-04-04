@@ -27,7 +27,6 @@ import java.util.Map;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-/** Renders the detected AR planes. */
 public class PlaneRenderer {
     private static final String TAG = PlaneRenderer.class.getSimpleName();
 
@@ -52,11 +51,6 @@ public class PlaneRenderer {
     private static final float DOTS_PER_METER = 10.0f;
     private static final float EQUILATERAL_TRIANGLE_SCALE = (float) (1 / Math.sqrt(3));
 
-    // Using the "signed distance field" approach to render sharp lines and circles.
-    // {dotThreshold, lineThreshold, lineFadeSpeed, occlusionScale}
-    // dotThreshold/lineThreshold: red/green intensity above which dots/lines are present
-    // lineFadeShrink:  lines will fade in between alpha = 1-(1/lineFadeShrink) and 1.0
-    // occlusionShrink: occluded planes will fade out between alpha = 0 and 1/occlusionShrink
     private static final float[] GRID_CONTROL = {0.2f, 0.4f, 2.0f, 1.5f};
 
     private int planeProgram;
@@ -81,7 +75,6 @@ public class PlaneRenderer {
                     .order(ByteOrder.nativeOrder())
                     .asShortBuffer();
 
-    // Temporary lists/matrices allocated here to reduce number of allocations for each frame.
     private final float[] modelMatrix = new float[16];
     private final float[] modelViewMatrix = new float[16];
     private final float[] modelViewProjectionMatrix = new float[16];
@@ -93,13 +86,6 @@ public class PlaneRenderer {
 
     public PlaneRenderer() {}
 
-    /**
-     * Allocates and initializes OpenGL resources needed by the plane renderer. Must be called on the
-     * OpenGL thread, typically in {@link GLSurfaceView.Renderer#onSurfaceCreated(GL10, EGLConfig)}.
-     *
-     * @param context Needed to access shader source and texture PNG.
-     * @param gridDistanceTextureName Name of the PNG file containing the grid texture.
-     */
     public void createOnGlThread(Context context, String gridDistanceTextureName) throws IOException {
         int vertexShader =
                 ShaderUtil.loadGLShader(TAG, context, GLES20.GL_VERTEX_SHADER, R.raw.plane_vertex);
@@ -114,7 +100,6 @@ public class PlaneRenderer {
 
         ShaderUtil.checkGLError(TAG, "Program creation");
 
-        // Read the texture.
         Bitmap textureBitmap =
                 BitmapFactory.decodeStream(context.getAssets().open(gridDistanceTextureName));
 
@@ -145,7 +130,6 @@ public class PlaneRenderer {
         ShaderUtil.checkGLError(TAG, "Program parameters");
     }
 
-    /** Updates the plane model transform matrix and extents. */
     private void updatePlaneParameters(
             float[] planeMatrix, float extentX, float extentZ, FloatBuffer boundary) {
         System.arraycopy(planeMatrix, 0, modelMatrix, 0, 16);
@@ -155,17 +139,12 @@ public class PlaneRenderer {
             return;
         }
 
-        // Generate a new set of vertices and a corresponding triangle strip index set so that
-        // the plane boundary polygon has a fading edge. This is done by making a copy of the
-        // boundary polygon vertices and scaling it down around center to push it inwards. Then
-        // the index buffer is setup accordingly.
         boundary.rewind();
         int boundaryVertices = boundary.limit() / 2;
         int numVertices;
         int numIndices;
 
         numVertices = boundaryVertices * VERTS_PER_BOUNDARY_VERT;
-        // drawn as GL_TRIANGLE_STRIP with 3n-2 triangles (n-2 for fill, 2n for perimeter).
         numIndices = boundaryVertices * INDICES_PER_BOUNDARY_VERT;
 
         if (vertexBuffer.capacity() < numVertices * COORDS_PER_VERTEX) {
@@ -194,9 +173,6 @@ public class PlaneRenderer {
         indexBuffer.rewind();
         indexBuffer.limit(numIndices);
 
-        // Note: when either dimension of the bounding box is smaller than 2*FADE_RADIUS_M we
-        // generate a bunch of 0-area triangles.  These don't get rendered though so it works
-        // out ok.
         float xScale = Math.max((extentX - 2 * FADE_RADIUS_M) / extentX, 0.0f);
         float zScale = Math.max((extentZ - 2 * FADE_RADIUS_M) / extentZ, 0.0f);
 
@@ -211,17 +187,12 @@ public class PlaneRenderer {
             vertexBuffer.put(1.0f);
         }
 
-        // step 1, perimeter
         indexBuffer.put((short) ((boundaryVertices - 1) * 2));
         for (int i = 0; i < boundaryVertices; ++i) {
             indexBuffer.put((short) (i * 2));
             indexBuffer.put((short) (i * 2 + 1));
         }
         indexBuffer.put((short) 1);
-        // This leaves us on the interior edge of the perimeter between the inset vertices
-        // for boundary verts n-1 and 0.
-
-        // step 2, interior:
         for (int i = 1; i < boundaryVertices / 2; ++i) {
             indexBuffer.put((short) ((boundaryVertices - 1 - i) * 2 + 1));
             indexBuffer.put((short) (i * 2 + 1));
@@ -232,12 +203,9 @@ public class PlaneRenderer {
     }
 
     private void draw(float[] cameraView, float[] cameraPerspective) {
-        // Build the ModelView and ModelViewProjection matrices
-        // for calculating cube position and light.
         Matrix.multiplyMM(modelViewMatrix, 0, cameraView, 0, modelMatrix, 0);
         Matrix.multiplyMM(modelViewProjectionMatrix, 0, cameraPerspective, 0, modelViewMatrix, 0);
 
-        // Set the position of the plane
         vertexBuffer.rewind();
         GLES20.glVertexAttribPointer(
                 planeXZPositionAlphaAttribute,
@@ -247,7 +215,6 @@ public class PlaneRenderer {
                 BYTES_PER_FLOAT * COORDS_PER_VERTEX,
                 vertexBuffer);
 
-        // Set the Model and ModelViewProjection matrices in the shader.
         GLES20.glUniformMatrix4fv(planeModelUniform, 1, false, modelMatrix, 0);
         GLES20.glUniformMatrix4fv(
                 planeModelViewProjectionUniform, 1, false, modelViewProjectionMatrix, 0);
@@ -268,17 +235,7 @@ public class PlaneRenderer {
         }
     }
 
-    /**
-     * Draws the collection of tracked planes, with closer planes hiding more distant ones.
-     *
-     * @param allPlanes The collection of planes to draw.
-     * @param cameraPose The pose of the camera, as returned by {@link Camera#getPose()}
-     * @param cameraPerspective The projection matrix, as returned by {@link
-     *     Camera#getProjectionMatrix(float[], int, float, float)}
-     */
     public void drawPlanes(Collection<Plane> allPlanes, Pose cameraPose, float[] cameraPerspective) {
-        // Planes must be sorted by distance from camera so that we draw closer planes first, and
-        // they occlude the farther planes.
         List<SortablePlane> sortedPlanes = new ArrayList<>();
         float[] normal = new float[3];
         float cameraX = cameraPose.tx();
@@ -290,14 +247,12 @@ public class PlaneRenderer {
             }
 
             Pose center = plane.getCenterPose();
-            // Get transformed Y axis of plane's coordinate system.
             center.getTransformedAxis(1, 1.0f, normal, 0);
-            // Compute dot product of plane's normal with vector from camera to plane center.
             float distance =
                     (cameraX - center.tx()) * normal[0]
                             + (cameraY - center.ty()) * normal[1]
                             + (cameraZ - center.tz()) * normal[2];
-            if (distance < 0) { // Plane is back-facing.
+            if (distance < 0) {
                 continue;
             }
             sortedPlanes.add(new SortablePlane(distance, plane));
@@ -314,35 +269,26 @@ public class PlaneRenderer {
         float[] cameraView = new float[16];
         cameraPose.inverse().toMatrix(cameraView, 0);
 
-        // Planes are drawn with additive blending, masked by the alpha channel for occlusion.
-
-        // Start by clearing the alpha channel of the color buffer to 1.0.
         GLES20.glClearColor(1, 1, 1, 1);
         GLES20.glColorMask(false, false, false, true);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
         GLES20.glColorMask(true, true, true, true);
 
-        // Disable depth write.
         GLES20.glDepthMask(false);
 
-        // Additive blending, masked by alpha channel, clearing alpha channel.
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFuncSeparate(
                 GLES20.GL_DST_ALPHA, GLES20.GL_ONE, // RGB (src, dest)
                 GLES20.GL_ZERO, GLES20.GL_ONE_MINUS_SRC_ALPHA); // ALPHA (src, dest)
 
-        // Set up the shader.
         GLES20.glUseProgram(planeProgram);
 
-        // Attach the texture.
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[0]);
         GLES20.glUniform1i(textureUniform, 0);
 
-        // Shared fragment uniforms.
         GLES20.glUniform4fv(gridControlUniform, 1, GRID_CONTROL, 0);
 
-        // Enable vertex arrays
         GLES20.glEnableVertexAttribArray(planeXZPositionAlphaAttribute);
 
         ShaderUtil.checkGLError(TAG, "Setting up to draw planes");
@@ -355,21 +301,17 @@ public class PlaneRenderer {
             updatePlaneParameters(
                     planeMatrix, plane.getExtentX(), plane.getExtentZ(), plane.getPolygon());
 
-            // Get plane index. Keep a map to assign same indices to same planes.
             Integer planeIndex = planeIndexMap.get(plane);
             if (planeIndex == null) {
                 planeIndex = planeIndexMap.size();
                 planeIndexMap.put(plane, planeIndex);
             }
 
-            // Set plane color. Computed deterministically from the Plane index.
             int colorIndex = planeIndex % PLANE_COLORS_RGBA.length;
             colorRgbaToFloat(planeColor, PLANE_COLORS_RGBA[colorIndex]);
             GLES20.glUniform4fv(lineColorUniform, 1, planeColor, 0);
             GLES20.glUniform4fv(dotColorUniform, 1, planeColor, 0);
 
-            // Each plane will have its own angle offset from others, to make them easier to
-            // distinguish. Compute a 2x2 rotation matrix from the angle.
             float angleRadians = planeIndex * 0.144f;
             float uScale = DOTS_PER_METER;
             float vScale = DOTS_PER_METER * EQUILATERAL_TRIANGLE_SCALE;
@@ -381,8 +323,7 @@ public class PlaneRenderer {
 
             draw(cameraView, cameraPerspective);
         }
-
-        // Clean up the state we set
+        
         GLES20.glDisableVertexAttribArray(planeXZPositionAlphaAttribute);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
         GLES20.glDisable(GLES20.GL_BLEND);

@@ -91,7 +91,7 @@ public class PointCloudRenderer {
 
         ShaderUtil.checkGLError(TAG, "after update");
     }
-    
+
     public void draw(float[] cameraView, float[] cameraPerspective) {
         float[] modelViewProjection = new float[16];
         Matrix.multiplyMM(modelViewProjection, 0, cameraPerspective, 0, cameraView, 0);
