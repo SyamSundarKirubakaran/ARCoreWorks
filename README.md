@@ -16,7 +16,7 @@ An Android App that illustrates the basics of ARCore by implementing the followi
 * Plane Renderer
 * Object Renderer
 * Shaders using GLSL
-* Utility and helper functions to get support to get up and running with ARCore.<br />
+* Utility and helper functions to get support and to get up and running with ARCore.<br />
 
 **Show case:**
 <br />
