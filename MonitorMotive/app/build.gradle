@@ -19,6 +19,8 @@ android {
 }
 
 dependencies {
+    implementation 'com.google.ar:core:1.0.0'
+    implementation 'de.javagl:obj:0.2.1'
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.android.support:appcompat-v7:27.1.0'
     implementation 'com.android.support.constraint:constraint-layout:1.0.2'
