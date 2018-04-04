@@ -13,10 +13,7 @@ import java.nio.FloatBuffer;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-/**
- * This class renders the AR background from camera feed. It creates and hosts the texture given to
- * ARCore to be filled with the camera image.
- */
+
 public class BackgroundRenderer {
     private static final String TAG = BackgroundRenderer.class.getSimpleName();
 
@@ -40,15 +37,7 @@ public class BackgroundRenderer {
         return textureId;
     }
 
-    /**
-     * Allocates and initializes OpenGL resources needed by the background renderer. Must be called on
-     * the OpenGL thread, typically in {@link GLSurfaceView.Renderer#onSurfaceCreated(GL10,
-     * EGLConfig)}.
-     *
-     * @param context Needed to access shader source.
-     */
     public void createOnGlThread(Context context) {
-        // Generate the background texture.
         int[] textures = new int[1];
         GLES20.glGenTextures(1, textures, 0);
         textureId = textures[0];
@@ -102,24 +91,11 @@ public class BackgroundRenderer {
         ShaderUtil.checkGLError(TAG, "Program parameters");
     }
 
-    /**
-     * Draws the AR background image. The image will be drawn such that virtual content rendered with
-     * the matrices provided by {@link com.google.ar.core.Camera#getViewMatrix(float[], int)} and
-     * {@link com.google.ar.core.Camera#getProjectionMatrix(float[], int, float, float)} will
-     * accurately follow static physical objects. This must be called <b>before</b> drawing virtual
-     * content.
-     *
-     * @param frame The last {@code Frame} returned by {@link Session#update()}.
-     */
     public void draw(Frame frame) {
-        // If display rotation changed (also includes view size change), we need to re-query the uv
-        // coordinates for the screen rect, as they may have changed as well.
         if (frame.hasDisplayGeometryChanged()) {
             frame.transformDisplayUvCoords(quadTexCoord, quadTexCoordTransformed);
         }
 
-        // No need to test or write depth, the screen quad has arbitrary depth, and is expected
-        // to be drawn first.
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
         GLES20.glDepthMask(false);
 
@@ -127,11 +103,9 @@ public class BackgroundRenderer {
 
         GLES20.glUseProgram(quadProgram);
 
-        // Set the vertex positions.
         GLES20.glVertexAttribPointer(
                 quadPositionParam, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, 0, quadVertices);
 
-        // Set the texture coordinates.
         GLES20.glVertexAttribPointer(
                 quadTexCoordParam,
                 TEXCOORDS_PER_VERTEX,
@@ -140,17 +114,14 @@ public class BackgroundRenderer {
                 0,
                 quadTexCoordTransformed);
 
-        // Enable vertex arrays
         GLES20.glEnableVertexAttribArray(quadPositionParam);
         GLES20.glEnableVertexAttribArray(quadTexCoordParam);
 
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 
-        // Disable vertex arrays
         GLES20.glDisableVertexAttribArray(quadPositionParam);
         GLES20.glDisableVertexAttribArray(quadTexCoordParam);
-
-        // Restore the depth state for further drawing.
+        
         GLES20.glDepthMask(true);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
 

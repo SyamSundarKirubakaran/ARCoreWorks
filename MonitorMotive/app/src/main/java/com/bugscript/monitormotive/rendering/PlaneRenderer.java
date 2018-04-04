@@ -323,7 +323,7 @@ public class PlaneRenderer {
 
             draw(cameraView, cameraPerspective);
         }
-        
+
         GLES20.glDisableVertexAttribArray(planeXZPositionAlphaAttribute);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
         GLES20.glDisable(GLES20.GL_BLEND);
